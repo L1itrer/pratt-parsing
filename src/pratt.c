@@ -54,6 +54,7 @@ typedef struct Token {
 typedef enum {
   ERR_NONE = 0,
   ERR_UNEXPECTED_TOKEN,
+  ERR_DIVIDE_BY_ZERO,
 } ParseError;
 
 typedef struct {
@@ -75,6 +76,7 @@ String8 input_paren2 = Str8Lit("(1+2)*(3*4.0)");
 String8 input_paren3 = Str8Lit("(((1 + 2)))");
 String8 input_paren4 = Str8Lit("((1 + 2) * (3 + 4))*(4)-1");
 String8 input_minus = Str8Lit("-1 + 2");
+String8 input_zero = Str8Lit("1 / 0");
 
 typedef struct AstNode AstNode;
 struct AstNode {
@@ -387,7 +389,6 @@ AstNode* parse_expression_rec(Arena* a, Lexer* l, ParseError* err, i32 min_prec)
     }
     else
     {
-      Assert(0); // @Cleanup: remove
       *err = ERR_UNEXPECTED_TOKEN;
     }
   }
@@ -403,44 +404,15 @@ AstNode* parse_expression(Arena* a, Lexer* l, ParseError* err)
 
 double eval_expression_recursive(AstNode* root)
 {
-  double result = 0.0;
-  switch (root->kind)
-  {
-    case TOK_NUM:
-      {
-        result = root->value;
-      }break;
-    case TOK_PLUS:
-      {
-        double lhs = eval_expression_recursive(root->left);
-        double rhs = eval_expression_recursive(root->right);
-        result = lhs + rhs;
-      } break;
-    case TOK_MINUS:
-      {
-        double lhs = eval_expression_recursive(root->left);
-        double rhs = eval_expression_recursive(root->right);
-        result = lhs - rhs;
-      } break;
-    case TOK_ASTERISK:
-      {
-        double lhs = eval_expression_recursive(root->left);
-        double rhs = eval_expression_recursive(root->right);
-        result = lhs * rhs;
-      } break;
-    case TOK_FORWARD_SLASH:
-      {
-        double lhs = eval_expression_recursive(root->left);
-        double rhs = eval_expression_recursive(root->right);
-        Assert(rhs != 0); // @Cleunup figure out what to do here
-        result = lhs / rhs;
-      } break;
-    default:
-      {
-        Assert(0); // unreachable
-      }
-  }
-  return result;
+  if (root->kind == TOK_NUM) return root->value;
+  double lhs = eval_expression_recursive(root->left);
+  double rhs = eval_expression_recursive(root->right);
+  if (root->kind == TOK_PLUS) return lhs + rhs;
+  if (root->kind == TOK_MINUS) return lhs - rhs;
+  if (root->kind == TOK_ASTERISK) return lhs * rhs;
+  if (root->kind == TOK_FORWARD_SLASH) return lhs / rhs; // it's not invalid to divide by  floating zero but still not sure if its correct
+  Assert(0);
+  return 0.0;
 }
 
 double eval_string(Arena* a, String8 input)
@@ -478,7 +450,7 @@ void test_lex_string(String8 input)
 
 int main(void)
 {
-  String8 input = input_paren4;
+  String8 input = input_zero;
   Arena* arena = arena_alloc();
   double result = eval_string(arena, input);
   printf("[%.*s] = %lf\n", Str8Fmt(input), result);
