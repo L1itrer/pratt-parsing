@@ -400,12 +400,59 @@ AstNode* parse_expression(Arena* a, Lexer* l, ParseError* err)
   return parse_expression_rec(a, l, err, -9999);
 }
 
-double calc_string(Arena* a, String8 input)
+
+double eval_expression_recursive(AstNode* root)
+{
+  double result = 0.0;
+  switch (root->kind)
+  {
+    case TOK_NUM:
+      {
+        result = root->value;
+      }break;
+    case TOK_PLUS:
+      {
+        double lhs = eval_expression_recursive(root->left);
+        double rhs = eval_expression_recursive(root->right);
+        result = lhs + rhs;
+      } break;
+    case TOK_MINUS:
+      {
+        double lhs = eval_expression_recursive(root->left);
+        double rhs = eval_expression_recursive(root->right);
+        result = lhs - rhs;
+      } break;
+    case TOK_ASTERISK:
+      {
+        double lhs = eval_expression_recursive(root->left);
+        double rhs = eval_expression_recursive(root->right);
+        result = lhs * rhs;
+      } break;
+    case TOK_FORWARD_SLASH:
+      {
+        double lhs = eval_expression_recursive(root->left);
+        double rhs = eval_expression_recursive(root->right);
+        Assert(rhs != 0); // @Cleunup figure out what to do here
+        result = lhs / rhs;
+      } break;
+    default:
+      {
+        Assert(0); // unreachable
+      }
+  }
+  return result;
+}
+
+double eval_string(Arena* a, String8 input)
 {
   double result = 0.0;
   Lexer l = lexer_init(input);
   ParseError err = ERR_NONE;
-  AstNode* res = parse_expression(a, &l, &err);
+  AstNode* parse_res = parse_expression(a, &l, &err);
+  if (err == ERR_NONE)
+  {
+    result = eval_expression_recursive(parse_res);
+  }
   return result;
 }
 
@@ -431,10 +478,10 @@ void test_lex_string(String8 input)
 
 int main(void)
 {
-  String8 input = input_minus;
+  String8 input = input_paren4;
   Arena* arena = arena_alloc();
-  test_lex_string(input);
-  calc_string(arena, input);
+  double result = eval_string(arena, input);
+  printf("[%.*s] = %lf\n", Str8Fmt(input), result);
   arena_release(arena);
 }
 
