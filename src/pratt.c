@@ -2,7 +2,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include <string.h>
 #if PRATT_DEBUG
 # define ARENA_DEBUG 1
 #else
@@ -62,6 +61,9 @@ typedef struct {
   i64 len;
 } String8;
 
+
+bool is_binary_operator(Token tok);
+
 #define Str8Lit(cstr) {.ptr=cstr,.len=(sizeof(cstr))-1}
 #define Str8Fmt(str8) (int)str8.len, str8.ptr
 
@@ -70,6 +72,9 @@ String8 input_left = Str8Lit("4 * 3 + 2 - 1");
 String8 input_mixed = Str8Lit("1 + 2 + 3 + 4 + 5");
 String8 input_paren = Str8Lit("1 + 2 + 3 + (4 + 5)");
 String8 input_paren2 = Str8Lit("(1+2)*(3*4.0)");
+String8 input_paren3 = Str8Lit("(((1 + 2)))");
+String8 input_paren4 = Str8Lit("((1 + 2) * (3 + 4))*(4)-1");
+String8 input_minus = Str8Lit("-1 + 2");
 
 typedef struct AstNode AstNode;
 struct AstNode {
@@ -81,13 +86,14 @@ struct AstNode {
 
 typedef struct Lexer {
   Token tok;
+  Token prev_tok;
   String8 stream;
   i64 pos;
 } Lexer;
 
 Lexer lexer_init(String8 in)
 {
-  return (Lexer){.pos = 0, .stream = in, .tok = (Token){.kind = -1, .pos = -1}};
+  return (Lexer){.pos = 0, .stream = in, .tok = (Token){.kind = -1, .pos = -1}, .prev_tok = {}};
 }
 
 char lex_peek_char(Lexer* l)
@@ -132,7 +138,7 @@ String8 scan_number(Lexer* l)
   for (;;)
   {
     char c = lex_peek_char(l);
-    if (is_num(c) || c == '.')
+    if (is_num(c) || c == '.' || (c == '-' && result.len == 0))
     {
       lex_eat_char(l);
       result.len += 1;
@@ -183,10 +189,15 @@ Token lex_peek_token(Lexer* l)
         c = lex_peek_char(l);
         if (is_num(c))
         {
-          l->pos -= 1;
-          goto number;
+          // if the previous token was an operator it's a unary minus
+          // @Hack: and also it it's the start of input it's also a unary minus
+          if (is_binary_operator(l->prev_tok) || l->pos == 1)
+          {
+            l->pos -= 1;
+            goto number;
+          }
         }
-        else tok->kind = TOK_MINUS;
+        tok->kind = TOK_MINUS;
       } break;
     case '*':
       {
@@ -244,6 +255,7 @@ err:
 
 void lex_eat_token(Lexer* l)
 {
+  l->prev_tok = l->tok;
   l->tok = (Token){.kind = -1};
 }
 
@@ -265,7 +277,7 @@ typedef struct AstStack{
 
 bool is_binary_operator(Token tok)
 {
-  return (tok.kind > TOK_NUM) && (tok.kind < TOK_EOF);
+  return (tok.kind > TOK_NUM) && (tok.kind < TOK_OPEN_PAREN);
 }
 
 AstNode* make_number(Arena* a, double val)
@@ -390,9 +402,10 @@ AstNode* parse_expression(Arena* a, Lexer* l, ParseError* err)
 
 double calc_string(Arena* a, String8 input)
 {
-  (void)a;
-  (void)input;
   double result = 0.0;
+  Lexer l = lexer_init(input);
+  ParseError err = ERR_NONE;
+  AstNode* res = parse_expression(a, &l, &err);
   return result;
 }
 
@@ -418,10 +431,10 @@ void test_lex_string(String8 input)
 
 int main(void)
 {
-  String8 input = input_paren2;
+  String8 input = input_minus;
   Arena* arena = arena_alloc();
   test_lex_string(input);
-  //calc_string(arena, input);
+  calc_string(arena, input);
   arena_release(arena);
 }
 
