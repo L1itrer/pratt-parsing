@@ -62,76 +62,14 @@ typedef struct {
   i64 len;
 } String8;
 
-#define Str8Lit(cstr) ((String8){.ptr=cstr,.len=sizeof(cstr)-1})
+#define Str8Lit(cstr) {.ptr=cstr,.len=(sizeof(cstr))-1}
 #define Str8Fmt(str8) (int)str8.len, str8.ptr
 
-Token input_right[] = {
-  {TOK_NUM, 1.0},
-  {TOK_MINUS, 0.0},
-  {TOK_NUM, 2.0},
-  {TOK_PLUS, 0.0},
-  {TOK_NUM, 3.0},
-  {TOK_ASTERISK, 0.0},
-  {TOK_NUM, 4.0},
-  {TOK_EOF, 0.0},
-};
-
-
-Token input_left[] = {
-  {TOK_NUM, 4.0},
-  {TOK_ASTERISK, 0.0},
-  {TOK_NUM, 3.0},
-  {TOK_PLUS, 0.0},
-  {TOK_NUM, 2.0},
-  {TOK_MINUS, 0.0},
-  {TOK_NUM, 1.0},
-  {TOK_EOF, 0.0},
-};
-
-
-Token input_mixed[] = {
-  {TOK_NUM, 1.0},
-  {TOK_PLUS, 0.0},
-  {TOK_NUM, 2.0},
-  {TOK_ASTERISK, 0.0},
-  {TOK_NUM, 3.0},
-  {TOK_FORWARD_SLASH, 0.0},
-  {TOK_NUM, 4.0},
-  {TOK_MINUS, 0.0},
-  {TOK_NUM, 5.0},
-  {TOK_EOF, 0.0},
-};
-
-
-Token input_paren[] = {
-  {TOK_NUM, 1.0},
-  {TOK_PLUS, 0.0},
-  {TOK_NUM, 2.0},
-  {TOK_ASTERISK, 0.0},
-  {TOK_NUM, 3.0},
-  {TOK_FORWARD_SLASH, 0.0},
-  {TOK_OPEN_PAREN, 0.0},
-  {TOK_NUM, 4.0},
-  {TOK_MINUS, 0.0},
-  {TOK_NUM, 5.0},
-  {TOK_CLOSE_PAREN, 0.0},
-  {TOK_EOF, 0.0},
-};
-
-Token input_paren2[] = {
-  {TOK_OPEN_PAREN, 0.0},
-  {TOK_NUM, 1.0},
-  {TOK_PLUS, 0.0},
-  {TOK_NUM, 2.0},
-  {TOK_CLOSE_PAREN, 0.0},
-  {TOK_ASTERISK, 0.0},
-  {TOK_OPEN_PAREN, 0.0},
-  {TOK_NUM, 3.0},
-  {TOK_PLUS, 0.0},
-  {TOK_NUM, 4.0},
-  {TOK_CLOSE_PAREN, 0.0},
-  {TOK_EOF, 0.0},
-};
+String8 input_right = Str8Lit("1 + 2 + 3+4");
+String8 input_left = Str8Lit("4 * 3 + 2 - 1");
+String8 input_mixed = Str8Lit("1 + 2 + 3 + 4 + 5");
+String8 input_paren = Str8Lit("1 + 2 + 3 + (4 + 5)");
+String8 input_paren2 = Str8Lit("(1+2)*(3*4.0)");
 
 typedef struct AstNode AstNode;
 struct AstNode {
@@ -154,7 +92,7 @@ Lexer lexer_init(String8 in)
 
 char lex_peek_char(Lexer* l)
 {
-  Assert(l->pos < l->stream.len);
+  Assert(l->pos <= l->stream.len);
   if (l->pos >= l->stream.len) return -1;
   return l->stream.ptr[l->pos];
 }
@@ -452,6 +390,8 @@ AstNode* parse_expression(Arena* a, Lexer* l, ParseError* err)
 
 double calc_string(Arena* a, String8 input)
 {
+  (void)a;
+  (void)input;
   double result = 0.0;
   return result;
 }
@@ -478,7 +418,7 @@ void test_lex_string(String8 input)
 
 int main(void)
 {
-  String8 input = Str8Lit("(1 + 2) * (3 + 4)");
+  String8 input = input_paren2;
   Arena* arena = arena_alloc();
   test_lex_string(input);
   //calc_string(arena, input);

@@ -8,7 +8,8 @@ int main(int argc, char* argv[])
   Cmd cmd_static = {0};
   if (!mkdir_if_not_exists("./out/")) return 1;
   Cmd* cmd = &cmd_static;
-  nob_cc(cmd);
+  //nob_cc(cmd);
+  cmd_append(cmd, "clang-cl");
   cmd_append(cmd, "-nologo");
   cmd_append(cmd, "./src/pratt.c");
   cmd_append(cmd, "-Fo:out\\", "-Fd:out\\", "-Fe:out\\pratt.exe", "-Zi", "-W4");
