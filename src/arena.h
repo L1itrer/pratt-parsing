@@ -120,7 +120,7 @@ void temp_end(Temp temp);
 #endif
 
 #define AssertAlways(x) do{if(!(x)) {Trap();}}while(0)
-#if CLOSER_DEBUG
+#if ARENA_DEBUG
 # define Assert(x) AssertAlways(x)
 #else
 # define Assert(x) (void)(x)

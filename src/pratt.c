@@ -1,6 +1,11 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#if PRATT_DEBUG
+# define ARENA_DEBUG 1
+#else
+# define ARENA_DEBUG 0
+#endif
 #include "arena.h"
 
 typedef uint64_t u64;
@@ -16,6 +21,8 @@ X(TOK_PLUS, 2)\
 X(TOK_MINUS, 2)\
 X(TOK_ASTERISK, 3)\
 X(TOK_FORWARD_SLASH, 3)\
+X(TOK_OPEN_PAREN, 0)\
+X(TOK_CLOSE_PAREN, 0)\
 X(TOK_EOF, 0)\
 
 typedef enum TokenKind {
@@ -64,6 +71,51 @@ Token input_left[] = {
   {TOK_EOF, 0.0},
 };
 
+
+Token input_mixed[] = {
+  {TOK_NUM, 1.0},
+  {TOK_PLUS, 0.0},
+  {TOK_NUM, 2.0},
+  {TOK_ASTERISK, 0.0},
+  {TOK_NUM, 3.0},
+  {TOK_FORWARD_SLASH, 0.0},
+  {TOK_NUM, 4.0},
+  {TOK_MINUS, 0.0},
+  {TOK_NUM, 5.0},
+  {TOK_EOF, 0.0},
+};
+
+
+Token input_paren[] = {
+  {TOK_NUM, 1.0},
+  {TOK_PLUS, 0.0},
+  {TOK_NUM, 2.0},
+  {TOK_ASTERISK, 0.0},
+  {TOK_NUM, 3.0},
+  {TOK_FORWARD_SLASH, 0.0},
+  {TOK_OPEN_PAREN, 0.0},
+  {TOK_NUM, 4.0},
+  {TOK_MINUS, 0.0},
+  {TOK_NUM, 5.0},
+  {TOK_CLOSE_PAREN, 0.0},
+  {TOK_EOF, 0.0},
+};
+
+Token input_paren2[] = {
+  {TOK_OPEN_PAREN, 0.0},
+  {TOK_NUM, 1.0},
+  {TOK_PLUS, 0.0},
+  {TOK_NUM, 2.0},
+  {TOK_CLOSE_PAREN, 0.0},
+  {TOK_ASTERISK, 0.0},
+  {TOK_OPEN_PAREN, 0.0},
+  {TOK_NUM, 3.0},
+  {TOK_PLUS, 0.0},
+  {TOK_NUM, 4.0},
+  {TOK_CLOSE_PAREN, 0.0},
+  {TOK_EOF, 0.0},
+};
+
 typedef struct AstNode AstNode;
 struct AstNode {
   i64 kind;
@@ -87,12 +139,14 @@ Token lex_peek_token(Lexer* l)
   return l->stream[l->pos];
 }
 
-
-Token lex_get_token(Lexer* l)
+Token lex_peek_prev_token(Lexer* l)
 {
-  Token tok = l->stream[l->pos];
+  Assert(l->pos-1 > 0);
+}
+
+void lex_eat_token(Lexer* l)
+{
   l->pos += 1;
-  return tok;
 }
 
 typedef struct AstStackNode AstStackNode;
@@ -124,107 +178,12 @@ AstNode* make_number(Arena* a, double val)
   return node;
 }
 
-
 AstNode* make_operator(Arena* a, TokenKind kind)
 {
   AstNode* node = arena_push_struct(a, AstNode);
   node->kind = kind;
   node->value = 0.0;
   return node;
-}
-
-
-AstNode* parse_expression_right(Arena* a, Lexer* l, ParseError* err)
-{
-  (void)err;
-  Token tok = {0};
-  AstNode* root = NULL;
-  AstStack* s = arena_push_struct(a, AstStack);
-
-  AstNode* op;
-  AstStackNode* snode;
-
-  tok = lex_get_token(l);
-  if (tok.kind != TOK_NUM) return NULL; // todo: report error
-
-  root = make_number(a, tok.value);
-
-  while (1)
-  {
-    tok = lex_get_token(l);
-
-    if (is_binary_operator(tok))
-    {
-      // push on the stack
-      op = make_operator(a, tok.kind);
-      op->left = root;
-      snode = arena_push_struct(a, AstStackNode);
-      snode->node = op;
-      StackPush(s, snode);
-      tok = lex_get_token(l);
-      if (tok.kind != TOK_NUM)
-      {
-        printf("Unexpected token: %llu\n", tok.kind);
-        break;
-      }
-      root = make_number(a, tok.value);
-    }
-    else if (tok.kind == TOK_EOF)
-    {
-      while (!StackIsEmpty(s))
-      {
-        s->top->node->right = root;
-        root = s->top->node;
-        s->top = s->top->prev; // pop
-      }
-      break;
-    }
-    else
-    {
-      printf("Unexpected token: %llu\n", tok.kind);
-      return NULL;
-    }
-  }
-  return root;
-}
-
-
-AstNode* parse_expression_left(Arena* a, Lexer* l, ParseError* err)
-{
-  (void)err;
-  AstNode* root = NULL;
-  Token tok;
-  tok = lex_get_token(l);
-  if (tok.kind != TOK_NUM) return NULL;
-  root = make_number(a, tok.value);
-
-  AstNode* op;
-  while (1)
-  {
-    tok = lex_get_token(l);
-    if (is_binary_operator(tok))
-    {
-      op = make_operator(a, tok.kind);
-      op->left = root;
-
-      tok = lex_get_token(l);
-      if (tok.kind != TOK_NUM) return NULL;
-      op->right = make_number(a, tok.value);
-
-      root = op;
-    }
-    else if (tok.kind == TOK_EOF)
-    {
-      break;
-    }
-    else
-    {
-      root = NULL;
-      printf("Unexpected token %llu\n", tok.kind);
-      break;
-    }
-  }
-  return root;
 }
 
 /*
@@ -253,57 +212,43 @@ parse_expression(min_prec)
   return node // ???
 }
 
-
-parse_expression_iter(min_prec)
-{
-  left = parse_leaf()
-  while 1
-  {
-    next = get_next_token()
-    if is_binary_operator(next) node = left
-
-    next_prec = get_precedence(next)
-    if next_prec <= min_prec
-    {
-      node = left
-    }
-    else
-    {
-      right = parse_expression(next_prec)
-      node = make_binary(left, to_operator(next), right)
-    }
-    if node == left break
-
-    left = node
-  }
-  return node // ???
-}
-
-
 */
 
 AstNode* parse_leaf(Arena* a, Lexer* l)
 {
-  Token tok = lex_get_token(l);
-  AssertAlways(tok.kind == TOK_NUM);
+  Token tok = lex_peek_token(l);
+  lex_eat_token(l);
+  Assert(tok.kind == TOK_NUM);
   return make_number(a, tok.value);
 }
 
 AstNode* parse_expression_rec(Arena* a, Lexer* l, ParseError* err, i32 min_prec)
 {
   AstNode* root = NULL;
-  Token tok = lex_get_token(l);
-  AssertAlways(tok.kind == TOK_NUM);
-
-  AstNode* left = make_number(a, tok.value);
+  AstNode* left = NULL;
+  Token tok = {0};
 
   for (;;)
   {
     tok = lex_peek_token(l);
     if (tok.kind == TOK_NUM)
     {
+      left = make_number(a, tok.value);
       root = left;
-      lex_get_token(l);
+      lex_eat_token(l);
+      // break;
+    }
+    else if (tok.kind == TOK_OPEN_PAREN)
+    {
+      lex_eat_token(l);
+      left = parse_expression_rec(a, l, err, -999);
+      root = left;
+      tok = lex_peek_token(l);
+      Assert(tok.kind == TOK_CLOSE_PAREN);
+      lex_eat_token(l);
+    }
+    else if (tok.kind == TOK_CLOSE_PAREN)
+    {
       break;
     }
     else if (is_binary_operator(tok))
@@ -312,7 +257,7 @@ AstNode* parse_expression_rec(Arena* a, Lexer* l, ParseError* err, i32 min_prec)
 
       if (next_prec > min_prec)
       {
-        lex_get_token(l);
+        lex_eat_token(l);
         root = make_operator(a, tok.kind);
         root->left = left;
         root->right = parse_expression_rec(a, l, err, next_prec);
@@ -345,7 +290,7 @@ AstNode* parse_expression(Arena* a, Lexer* l, ParseError* err)
 
 int main(void)
 {
-  Lexer l = lexer_init(input_right);
+  Lexer l = lexer_init(input_paren2);
   Arena* arena = arena_alloc();
   ParseError err = ERR_NONE;
   AstNode* res = parse_expression(arena, &l, &err);

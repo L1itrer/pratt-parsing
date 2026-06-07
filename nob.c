@@ -11,6 +11,7 @@ int main(int argc, char* argv[])
   nob_cc(cmd);
   cmd_append(cmd, "./src/pratt.c");
   cmd_append(cmd, "-Fo:out\\", "-Fd:out\\", "-Fe:out\\pratt.exe", "-Zi", "-W4");
+  cmd_append(cmd, "-DPRATT_DEBUG=1");
   if (!cmd_run(cmd)) return 1;
   return 0;
 }
