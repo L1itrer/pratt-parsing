@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
 #if PRATT_DEBUG
 # define ARENA_DEBUG 1
 #else
@@ -15,31 +17,38 @@ typedef int32_t  i32;
 #define ArrSize(arr) ((sizeof(arr)/sizeof(arr[0])))
 
 #define OPERATORS \
-X(TOK_ERR, 0)\
-X(TOK_NUM, 0)\
-X(TOK_PLUS, 2)\
-X(TOK_MINUS, 2)\
-X(TOK_ASTERISK, 3)\
-X(TOK_FORWARD_SLASH, 3)\
-X(TOK_OPEN_PAREN, 0)\
-X(TOK_CLOSE_PAREN, 0)\
-X(TOK_EOF, 0)\
+X(TOK_ERR, 0, "[ERROR]")\
+X(TOK_NUM, 0, "num")\
+X(TOK_PLUS, 2, "+")\
+X(TOK_MINUS, 2, "-")\
+X(TOK_ASTERISK, 3, "*")\
+X(TOK_FORWARD_SLASH, 3, "/")\
+X(TOK_OPEN_PAREN, 0, "(")\
+X(TOK_CLOSE_PAREN, 0, ")")\
+X(TOK_EOF, 0, "eof")\
 
 typedef enum TokenKind {
-#define X(tok, prec) tok,
+#define X(tok, prec, print) tok,
 OPERATORS
 #undef X
 } TokenKind;
 
 const i32 tok_prec_table[] = {
-#define X(tok, prec) prec,
+#define X(tok, prec, print) prec,
+OPERATORS
+#undef X
+};
+
+const char* tok_printable[] = {
+#define X(tok, prec, print) print,
 OPERATORS
 #undef X
 };
 
 typedef struct Token {
-  u64 kind;
+  i64 kind;
   double value;
+  i64 pos;
 }Token;
 
 
@@ -47,6 +56,14 @@ typedef enum {
   ERR_NONE = 0,
   ERR_UNEXPECTED_TOKEN,
 } ParseError;
+
+typedef struct {
+  char* ptr;
+  i64 len;
+} String8;
+
+#define Str8Lit(cstr) ((String8){.ptr=cstr,.len=sizeof(cstr)-1})
+#define Str8Fmt(str8) (int)str8.len, str8.ptr
 
 Token input_right[] = {
   {TOK_NUM, 1.0},
@@ -125,28 +142,171 @@ struct AstNode {
 };
 
 typedef struct Lexer {
-  Token* stream;
+  Token tok;
+  String8 stream;
   i64 pos;
 } Lexer;
 
-Lexer lexer_init(Token* in)
+Lexer lexer_init(String8 in)
 {
-  return (Lexer){.pos = 0, .stream = in};
+  return (Lexer){.pos = 0, .stream = in, .tok = (Token){.kind = -1, .pos = -1}};
+}
+
+char lex_peek_char(Lexer* l)
+{
+  Assert(l->pos < l->stream.len);
+  if (l->pos >= l->stream.len) return -1;
+  return l->stream.ptr[l->pos];
+}
+
+void lex_eat_char(Lexer* l)
+{
+  l->pos += 1;
+  if (l->pos > l->stream.len) l->pos = l->stream.len;
+  Assert(l->pos <= l->stream.len);
+}
+
+bool is_whitespace(char c)
+{
+  return c == ' ' || c == '\n' || c == '\r' || c == '\t';
+}
+
+void skip_whitespace(Lexer* l)
+{
+  for (;;)
+  {
+    char c = lex_peek_char(l);
+    if (is_whitespace(c)) lex_eat_char(l);
+    else break;
+  }
+}
+
+bool is_num(char c)
+{
+  return (c >= '0' && c <= '9');
+}
+
+String8 scan_number(Lexer* l)
+{
+  String8 result = l->stream;
+  result.len = 0;
+  result.ptr = l->stream.ptr + l->pos;
+  for (;;)
+  {
+    char c = lex_peek_char(l);
+    if (is_num(c) || c == '.')
+    {
+      lex_eat_char(l);
+      result.len += 1;
+    }
+    else break;
+  }
+  return result;
+}
+
+bool try_parse_num(String8 str, double* num)
+{
+  bool result = 1;
+  char* endptr = NULL;
+  double temp = strtod(str.ptr, &endptr);
+  if (endptr != (str.ptr + str.len))
+  {
+    result = 0;
+  }
+  else
+  {
+    *num = temp;
+  }
+  return result;
 }
 
 Token lex_peek_token(Lexer* l)
 {
-  return l->stream[l->pos];
+  if (l->tok.kind != -1) return l->tok;
+  Token* tok = &l->tok;
+  *tok = (Token){.kind = TOK_ERR, .pos = l->pos};
+  char c = -1;
+  skip_whitespace(l);
+  c = lex_peek_char(l);
+  switch (c)
+  {
+    case -1:
+      {
+        tok->kind = TOK_EOF;
+      } break;
+    case '+':
+      {
+        tok->kind = TOK_PLUS;
+        lex_eat_char(l);
+      } break;
+    case '-':
+      {
+        lex_eat_char(l);
+        c = lex_peek_char(l);
+        if (is_num(c))
+        {
+          l->pos -= 1;
+          goto number;
+        }
+        else tok->kind = TOK_MINUS;
+      } break;
+    case '*':
+      {
+        tok->kind = TOK_ASTERISK;
+        lex_eat_char(l);
+      } break;
+    case '/':
+      {
+        tok->kind = TOK_FORWARD_SLASH;
+        lex_eat_char(l);
+      } break;
+    case '(':
+      {
+        tok->kind = TOK_OPEN_PAREN;
+        lex_eat_char(l);
+      } break;
+    case ')':
+      {
+        tok->kind = TOK_CLOSE_PAREN;
+        lex_eat_char(l);
+      } break;
+    default:
+      {
+        if (is_num(c))
+        {
+number:
+          String8 num_str = scan_number(l);
+          if (num_str.ptr == NULL) goto err;
+          double num = 0.0;
+          if (!try_parse_num(num_str, &num))
+          {
+            tok->kind = TOK_ERR;
+          }
+          else
+          {
+            tok->kind = TOK_NUM;
+            tok->value = num;
+          }
+        }
+        else
+        {
+err:
+          tok->kind = TOK_ERR;
+        }
+      } break;
+  }
+  return l->tok;
 }
 
-Token lex_peek_prev_token(Lexer* l)
-{
-  Assert(l->pos-1 > 0);
-}
+// Token lex_peek_prev_token(Lexer* l)
+// {
+//   Assert(l->pos-1 > 0);
+//   return l->stream[l->pos-1];
+// }
 
 void lex_eat_token(Lexer* l)
 {
-  l->pos += 1;
+  l->tok = (Token){.kind = -1};
 }
 
 typedef struct AstStackNode AstStackNode;
@@ -230,6 +390,7 @@ AstNode* parse_expression_rec(Arena* a, Lexer* l, ParseError* err, i32 min_prec)
 
   for (;;)
   {
+    if (*err != ERR_NONE) break;
     tok = lex_peek_token(l);
     if (tok.kind == TOK_NUM)
     {
@@ -276,7 +437,8 @@ AstNode* parse_expression_rec(Arena* a, Lexer* l, ParseError* err, i32 min_prec)
     }
     else
     {
-      Trap();
+      Assert(0); // @Cleanup: remove
+      *err = ERR_UNEXPECTED_TOKEN;
     }
   }
 
@@ -288,17 +450,38 @@ AstNode* parse_expression(Arena* a, Lexer* l, ParseError* err)
   return parse_expression_rec(a, l, err, -9999);
 }
 
+double calc_string(Arena* a, String8 input)
+{
+  double result = 0.0;
+  return result;
+}
+
+void test_lex_string(String8 input)
+{
+  Lexer l = lexer_init(input);
+  for (;;)
+  {
+    Token tok = lex_peek_token(&l);
+    if (tok.kind == TOK_NUM)
+    {
+      printf("%s = %lf\n", tok_printable[tok.kind], tok.value);
+    }
+    else
+    {
+      printf("%s\n", tok_printable[tok.kind]);
+    }
+    if (tok.kind == TOK_ERR) break;
+    if (tok.kind == TOK_EOF) break;
+    lex_eat_token(&l);
+  }
+}
+
 int main(void)
 {
-  Lexer l = lexer_init(input_paren2);
+  String8 input = Str8Lit("(1 + 2) * (3 + 4)");
   Arena* arena = arena_alloc();
-  ParseError err = ERR_NONE;
-  AstNode* res = parse_expression(arena, &l, &err);
-  if (err == ERR_NONE)
-  {
-    printf("OK\n");
-  }
-  printf("%p\n", res);
+  test_lex_string(input);
+  //calc_string(arena, input);
   arena_release(arena);
 }
 

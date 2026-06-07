@@ -9,6 +9,7 @@ int main(int argc, char* argv[])
   if (!mkdir_if_not_exists("./out/")) return 1;
   Cmd* cmd = &cmd_static;
   nob_cc(cmd);
+  cmd_append(cmd, "-nologo");
   cmd_append(cmd, "./src/pratt.c");
   cmd_append(cmd, "-Fo:out\\", "-Fd:out\\", "-Fe:out\\pratt.exe", "-Zi", "-W4");
   cmd_append(cmd, "-DPRATT_DEBUG=1");
