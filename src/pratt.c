@@ -223,9 +223,9 @@ Token lex_peek_token(Lexer* l)
       } break;
     default:
       {
+number:
         if (is_num(c))
         {
-number:
           String8 num_str = scan_number(l);
           if (num_str.ptr == NULL) goto err;
           double num = 0.0;
@@ -450,7 +450,7 @@ void test_lex_string(String8 input)
 
 int main(void)
 {
-  String8 input = input_zero;
+  String8 input = input_minus;
   Arena* arena = arena_alloc();
   double result = eval_string(arena, input);
   printf("[%.*s] = %lf\n", Str8Fmt(input), result);

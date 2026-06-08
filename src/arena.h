@@ -3,6 +3,45 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+
+#define Min(a, b) (((a) < (b)) ? (a) : (b))
+#define Max(a, b) (((a) > (b)) ? (a) : (b))
+
+#ifdef _MSC_VER
+#define COMPILER_MSVC 1
+#elif __clang__
+#define COMPILER_CLANG 1
+#elif __GNUC__
+#define COMPILER_GCC 1
+#else
+#error This file requires extensions from msvc, clang or gcc
+#endif
+
+#define AlignPow2(x,b) (((x) + (b) - 1)&(~((b) - 1)))
+
+#if COMPILER_MSVC
+# define AlignOf(T) __alignof(T)
+#elif COMPILER_CLANG
+# define AlignOf(T) __alignof(T)
+#elif COMPILER_GCC
+# define AlignOf(T) __alignof__(T)
+#else
+# error AlignOf not defined for this compiler.
+#endif
+
+#if COMPILER_MSVC
+# define Trap() __debugbreak()
+#else
+# define Trap() __builtin_trap()
+#endif
+
+#define AssertAlways(x) do{if(!(x)) {Trap();}}while(0)
+#if ARENA_DEBUG
+# define Assert(x) AssertAlways(x)
+#else
+# define Assert(x) (void)(x)
+#endif
+
 // i don't really care about c++ but maybe i will in the future
 // so leaving C_LINKAGE here
 #define C_LINKAGE
@@ -56,7 +95,10 @@ typedef struct ArenaParams
 #define ArenaGlue(A,B) ArenaGlue_(A,B)
 #define ArenaStaticAssert(C, ID) static uint8_t ArenaGlue(ID, __LINE__)[(C)?1:-1]
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
 ArenaStaticAssert(sizeof(Arena) <= ARENA_HEADER_SIZE, arena_size_check);
+#pragma GCC diagnostic pop
 
 #define KB(num) (num*1024LL)
 #define MB(num) (KB(num)*1024LL)
@@ -88,43 +130,6 @@ typedef struct Temp {
 Temp temp_begin(Arena *arena);
 void temp_end(Temp temp);
 
-#define Min(a, b) (((a) < (b)) ? (a) : (b))
-#define Max(a, b) (((a) > (b)) ? (a) : (b))
-
-#ifdef _MSC_VER
-#define COMPILER_MSVC 1
-#elif __clang__
-#define COMPILER_CLANG 1
-#elif __GNUC__
-#define COMPILER_GCC 1
-#else
-#error This file requires extensions from msvc, clang or gcc
-#endif
-
-#define AlignPow2(x,b) (((x) + (b) - 1)&(~((b) - 1)))
-
-#if COMPILER_MSVC
-# define AlignOf(T) __alignof(T)
-#elif COMPILER_CLANG
-# define AlignOf(T) __alignof(T)
-#elif COMPILER_GCC
-# define AlignOf(T) __alignof__(T)
-#else
-# error AlignOf not defined for this compiler.
-#endif
-
-#if COMPILER_MSVC
-# define Trap() __debugbreak()
-#else
-# define Trap() __builtin_trap()
-#endif
-
-#define AssertAlways(x) do{if(!(x)) {Trap();}}while(0)
-#if ARENA_DEBUG
-# define Assert(x) AssertAlways(x)
-#else
-# define Assert(x) (void)(x)
-#endif
 
 
 
