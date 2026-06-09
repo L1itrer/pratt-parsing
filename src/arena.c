@@ -181,7 +181,7 @@ uint64_t arena_pos(Arena *arena)
 
 void arena_pop_to(Arena *arena, uint64_t pos)
 {
-    uint64_t big_pos = Min(ARENA_HEADER_SIZE, pos);
+    uint64_t big_pos = Max(ARENA_HEADER_SIZE, pos);
     Arena* curr = arena->curr;
 
     for (Arena* prev = 0;curr->base_position >= big_pos;curr = prev)

@@ -129,10 +129,8 @@ bool test_run(Arena* a, Test* test)
   return test_result;
 }
 
-int main(void)
+void tests_eval(Arena* arena)
 {
-  //String8 input = input_start_op;
-  Arena* arena = arena_alloc();
   int passed_tests = 0;
   int failed_tests = 0;
   for (size_t i = 0;i < ArrSize(tests);++i)
@@ -145,9 +143,25 @@ int main(void)
     {
       failed_tests += 1;
     }
+    arena_clear(arena);
   }
-
   printf("%sFinal report: passed = %d, failed = %d" ANSI_RESET "\n", failed_tests > 0 ? ANSI_RED : ANSI_GREEN, passed_tests, failed_tests);
+}
+
+void playground(Arena* a)
+{
+  (void)a;
+}
+
+int main(void)
+{
+  //String8 input = input_start_op;
+  Arena* arena = arena_alloc();
+#if 1
+  tests_eval(arena);
+#else
+  playground(arena);
+#endif
   //QCResult result = qc_core(arena, input);
   //printf("[%.*s] = %lf\n", Str8Fmt(input), result.value);
   arena_release(arena);
