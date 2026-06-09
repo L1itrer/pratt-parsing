@@ -10,22 +10,13 @@
 #endif
 #include "arena.h"
 
+#include "fred_api.h"
 
-#define push_array_no_zero_aligned(a, T, c, align) arena_push_array_no_zero_aligned(a, T, c, align)
-#define push_array_aligned(a, T, c, align) arena_push_array_aligned(a, T, c, align)
-#define push_array(a, T, c) arena_push_array_aligned(a, T, c, Max(8, AlignOf(T)))
 
 typedef uint64_t u64;
 typedef int64_t  i64;
 typedef int32_t  i32;
 
-typedef struct {
-  char* str;
-  uint64_t size;
-} String8;
-
-
-#define str8_lit(cstr) {.str=cstr,.size=(sizeof(cstr))-1}
 #define Str8Fmt(str8) (int)str8.size, str8.str
 #define Unused(p) (void)p
 
@@ -105,11 +96,11 @@ void test_report(Test* test, QCResult output)
 {
   if (output.status != test->expected.status)
   {
-    printf("Test %32s status " ANSI_RED "failure" ANSI_RESET ": expected %s, got %s\n", test->name, qc_err_strs[test->expected.status], qc_err_strs[output.status]);
+    printf("%s " ANSI_RED "failure" ANSI_RESET ": expected %s, got %s\n", test->name, qc_err_strs[test->expected.status], qc_err_strs[output.status]);
   }
   else
   {
-    printf("Test %s value " ANSI_RED "failure" ANSI_RESET ": expected %lf, got %lf\n", test->name, test->expected.value, output.value);
+    printf("%s " ANSI_RED "failure" ANSI_RESET ": expected %lf, got %lf\n", test->name, test->expected.value, output.value);
   }
 }
 
@@ -120,7 +111,10 @@ bool test_run(Arena* a, Test* test)
   if (result.status == test->expected.status)
   {
     if (result.value == test->expected.value)
+    {
       test_result = 1;
+      printf("%s..." ANSI_GREEN "OK\n" ANSI_RESET, test->name);
+    }
   }
   if (!test_result)
   {
@@ -150,7 +144,7 @@ void tests_eval(Arena* arena)
 
 void playground(Arena* a)
 {
-  (void)a;
+  test_run(a, &tests[1]);
 }
 
 int main(void)

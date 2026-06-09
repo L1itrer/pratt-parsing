@@ -1,3 +1,8 @@
+#include <stdint.h>
+#ifdef __clang__
+#include "arena.h"
+#include "fred_api.h"
+#endif
 #define QC_OPERATORS \
 X(QC_TOK_ERR, 0, "[ERROR]")\
 X(QC_TOK_NUM, 0, "num")\
@@ -39,6 +44,7 @@ typedef struct QCToken {
 X(QC_ERR_NONE, "QC_ERR_NONE") \
 X(QC_ERR_UNEXPECTED_TOKEN, "QC_ERR_UNEXPECTED_TOKEN") \
 X(QC_ERR_MISMATCHED_PARENS, "QC_ERR_MISMATCHED_PARENS") \
+X(QC_ERR_UNKNOWN, "QC_ERR_UNKNOWN") \
 
 
 typedef enum {
@@ -349,11 +355,96 @@ double qc_eval_expression_recursive(QCAstNode* root)
   if (root->kind == QC_TOK_FORWARD_SLASH) return lhs / rhs; // it's not invalid to divide by  floating zero but still not sure if its correct
   //Assert(0); // should be unreachable
   return 2137.0;
-} // 2 + 2
+}
+
+typedef struct QCStackNode QCStackNode;
+struct QCStackNode {
+  QCAstNode* node;
+  QCStackNode* prev;
+  double* parent_value;
+  double subtree_result_left;
+  double subtree_result_right;
+  uint32_t visited;
+};
+
+typedef struct {
+  QCStackNode* top;
+} QCStack;
 
 
-// 3 + 2 * 8
-// (2 + 4) * (1 - 0.5)
+
+#define QCStackIsEmpty(s) (s->top == NULL)
+#define QCStackPeek(s) (s->top)
+#define QCStackPop(s) do{\
+    s->top = s->top->prev;\
+}while(0)
+#define QCStackPush(s, n) do{ \
+  n->prev = s->top; \
+  s->top = n; \
+ }while(0)
+
+QCStackNode* qc_make_stack_node(Arena* a, QCAstNode* root, double* parent_value)
+{
+  QCStackNode* res = push_struct(a, QCStackNode);
+  res->node = root;
+  res->parent_value = parent_value;
+  return res;
+}
+
+uint32_t qc_eval_expression_iterative(Arena* a, QCAstNode* root, double* num)
+{
+  uint32_t result = 1;
+  QCStack stack_static = {0};
+  QCStack* s = &stack_static; // to make dereference a '->' not a '.'
+  s->top = qc_make_stack_node(a, root, num);
+  while (!QCStackIsEmpty(s))
+  {
+    QCStackNode* top = QCStackPeek(s);
+    QCAstNode* curr_node = top->node;
+    if (curr_node->kind == QC_TOK_NUM)
+    {
+      *top->parent_value = curr_node->value;
+      QCStackPop(s);
+    }
+    else
+    {
+      if (!top->visited)
+      {
+        top->visited = 1;
+        if (!curr_node->left || !curr_node->right)
+        {
+          result = 0; //something went wrong while parsing and we did not catch that
+          break;
+        }
+        QCStackNode* right = qc_make_stack_node(a, curr_node->right, &top->subtree_result_right);
+        QCStackNode* left  = qc_make_stack_node(a, curr_node->left,  &top->subtree_result_left);
+        QCStackPush(s, right);
+        QCStackPush(s, left);
+      }
+      else
+      {
+        double lhs = top->subtree_result_left;
+        double rhs = top->subtree_result_right;
+        double op_result;
+
+        if (curr_node->kind == QC_TOK_PLUS) op_result = lhs + rhs;
+        else if (curr_node->kind == QC_TOK_MINUS) op_result =  lhs - rhs;
+        else if (curr_node->kind == QC_TOK_ASTERISK) op_result = lhs * rhs;
+        else if (curr_node->kind == QC_TOK_FORWARD_SLASH) op_result = lhs / rhs; // @Verify is divide by zero something to check
+        else
+        {
+          result = 0; //something went wrong while parsing and we did not catch that
+          break;
+        }
+        *top->parent_value = op_result;
+        QCStackPop(s);
+      }
+    }
+  }
+
+  return result;
+}
+
 
 void test_lex_string(Arena* a, String8 input)
 {
@@ -384,7 +475,13 @@ QCResult qc_core(Arena* arena, String8 input) {
       //feed_queue_info(str8_fmt(arena, "parse_result %d", result.status));
       if (result.status == QC_ERR_NONE)
       {
-        result.value = qc_eval_expression_recursive(parse_result);
+        //result.value = qc_eval_expression_recursive(parse_result);
+        uint32_t evaled = qc_eval_expression_iterative(arena, parse_result, &result.value);
+        if (!evaled)
+        {
+          feed_queue_error((String8)str8_lit("Something went really wrong when evaluating! Sorry! Go harass me on discord"));
+          result.status = QC_ERR_UNKNOWN;
+        }
       }
       else
       {
@@ -412,6 +509,7 @@ QCResult qc_core(Arena* arena, String8 input) {
 }
 
 #ifndef FRED_EMULATION
+#ifndef __clang__
 
 DEF_PLUGIN_EDITOR_HOOK("Quick calc (msg)", "Calculates the selected text and sends the result to messages", quick_calc_msg) {
     Temp scratch = scratch_begin(NULL);
@@ -483,4 +581,5 @@ DEF_PLUGIN_EDITOR_HOOK("Quick calc (replace)", "Calculates the selected text and
   scratch_end(scratch);
 }
 
-#endif
+#endif // __clang__
+#endif // FRED_EMULATION
