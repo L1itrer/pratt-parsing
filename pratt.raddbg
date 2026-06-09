@@ -1,0 +1,8 @@
+// raddbg 0.9.27 project file
+
+target:
+{
+  executable: "out/pratt.exe"
+  working_directory: out
+  enabled: 1
+}
