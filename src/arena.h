@@ -95,10 +95,14 @@ typedef struct ArenaParams
 #define ArenaGlue(A,B) ArenaGlue_(A,B)
 #define ArenaStaticAssert(C, ID) static uint8_t ArenaGlue(ID, __LINE__)[(C)?1:-1]
 
+#if COMPILER_GCC
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-variable"
+#endif
 ArenaStaticAssert(sizeof(Arena) <= ARENA_HEADER_SIZE, arena_size_check);
+#if COMPILER_GCC
 #pragma GCC diagnostic pop
+#endif
 
 #define KB(num) (num*1024LL)
 #define MB(num) (KB(num)*1024LL)
