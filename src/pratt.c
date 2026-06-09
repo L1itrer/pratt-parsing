@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -69,25 +70,86 @@ void feed_queue_info(String8 msg)
 
 #include "quick_calc.c"
 
-String8 input_right = str8_lit("1 + 2 + 3+4");
-String8 input_left = str8_lit("4 * 3 + 2 - 1");
-String8 input_mixed = str8_lit("1 + 2 + 3 + 4 + 5");
-String8 input_paren = str8_lit("1 + 2 + 3 + (4 + 5)");
-String8 input_paren2 = str8_lit("(1+2)*(3*4.0)");
-String8 input_paren3 = str8_lit("(((1 + 2)))");
-String8 input_paren4 = str8_lit("((1 + 2) * (3 + 4))*(4)-1");
-String8 input_minus = str8_lit("-1 + 2");
-String8 input_zero = str8_lit("1 / 0");
+
+typedef struct {
+  String8 input;
+  QCResult expected;
+  const char* name;
+} Test;
+
+Test tests[] = {
+(Test){str8_lit("1 + 2 + 3+4"), (QCResult){.value = 10.0, .status = QC_ERR_NONE}, "input_right"},
+(Test){str8_lit("4 * 3 + 2 - 1"), (QCResult){.value = 13.0, .status = QC_ERR_NONE}, "input_left"},
+(Test){str8_lit("1 + 2 + 3 + (4 + 5)"), (QCResult){.value = 15.0, .status = QC_ERR_NONE},"input_paren"},
+(Test){str8_lit("(1+2)*(3*4.0)"), (QCResult){.value = 36.0, .status = QC_ERR_NONE}, "input_paren2"},
+(Test){str8_lit("(((1 + 2)))"), (QCResult){.value = 3.0, .status = QC_ERR_NONE},"input_paren3"},
+(Test){str8_lit("((1 + 2) * (3 + 4))*(4)-1"), (QCResult){.value = 83.0, .status = QC_ERR_NONE},"input_paren4"},
+(Test){str8_lit("-1 + 2"), (QCResult){.value = 1.0, .status = QC_ERR_NONE}, "negative_start"},
+(Test){str8_lit("1 / 0"), (QCResult){.value = INFINITY, .status = QC_ERR_NONE}, "divide_by_zero"},
+
+
+(Test){str8_lit("+ 2 - 4"), (QCResult){.value = 0.0, .status = QC_ERR_UNEXPECTED_TOKEN}, "operator_at_the_start"},
+(Test){str8_lit("2 + + 2 - 4"), (QCResult){.value = 0.0, .status = QC_ERR_UNEXPECTED_TOKEN}, "double_operator"},
+(Test){str8_lit("2 ++ 2 - 4"), (QCResult){.value = 0.0, .status = QC_ERR_UNEXPECTED_TOKEN}, "double_operator_no_space"},
+};
 
 String8 input_start_op = str8_lit("+ + 2 - 4");
 
+#define ArrSize(arr) (sizeof(arr)/sizeof(arr[0]))
+
+#define ANSI_RED "\e[0;31m"
+#define ANSI_GREEN "\e[0;92m"
+#define ANSI_RESET "\e[0m"
+
+void test_report(Test* test, QCResult output)
+{
+  if (output.status != test->expected.status)
+  {
+    printf("Test %32s status " ANSI_RED "failure" ANSI_RESET ": expected %s, got %s\n", test->name, qc_err_strs[test->expected.status], qc_err_strs[output.status]);
+  }
+  else
+  {
+    printf("Test %s value " ANSI_RED "failure" ANSI_RESET ": expected %lf, got %lf\n", test->name, test->expected.value, output.value);
+  }
+}
+
+bool test_run(Arena* a, Test* test)
+{
+  QCResult result = qc_core(a, test->input);
+  bool test_result = 0;
+  if (result.status == test->expected.status)
+  {
+    if (result.value == test->expected.value)
+      test_result = 1;
+  }
+  if (!test_result)
+  {
+    test_report(test, result);
+  }
+  return test_result;
+}
 
 int main(void)
 {
-  String8 input = input_start_op;
+  //String8 input = input_start_op;
   Arena* arena = arena_alloc();
-  QCResult result = qc_core(arena, input);
-  printf("[%.*s] = %lf\n", Str8Fmt(input), result.value);
+  int passed_tests = 0;
+  int failed_tests = 0;
+  for (size_t i = 0;i < ArrSize(tests);++i)
+  {
+    if (test_run(arena, &tests[i]))
+    {
+      passed_tests += 1;
+    }
+    else
+    {
+      failed_tests += 1;
+    }
+  }
+
+  printf("%sFinal report: passed = %d, failed = %d" ANSI_RESET "\n", failed_tests > 0 ? ANSI_RED : ANSI_GREEN, passed_tests, failed_tests);
+  //QCResult result = qc_core(arena, input);
+  //printf("[%.*s] = %lf\n", Str8Fmt(input), result.value);
   arena_release(arena);
 }
 

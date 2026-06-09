@@ -9,7 +9,7 @@ int main(int argc, char* argv[])
   if (!mkdir_if_not_exists("./out/")) return 1;
   Cmd* cmd = &cmd_static;
 #ifdef _WIN32
-  cmd_append(cmd, "cl");
+  cmd_append(cmd, "clang-cl");
   cmd_append(cmd, "-nologo");
   cmd_append(cmd, "-Fo:out\\", "-Fd:out\\", "-Fe:out\\pratt.exe", "-Zi", "-W4");
 #else

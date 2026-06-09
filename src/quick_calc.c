@@ -35,12 +35,27 @@ typedef struct QCToken {
   double value;
 }QCToken;
 
+#define QC_ERRORS \
+X(QC_ERR_NONE, "QC_ERR_NONE") \
+X(QC_ERR_UNEXPECTED_TOKEN, "QC_ERR_UNEXPECTED_TOKEN") \
+X(QC_ERR_MISMATCHED_PARENS, "QC_ERR_MISMATCHED_PARENS") \
+
+
 typedef enum {
-  QC_ERR_NONE = 0,
-  QC_ERR_UNEXPECTED_TOKEN,
-  QC_ERR_MISMATCHED_PARENS,
+#define X(err, str) err, 
+QC_ERRORS
+#undef X
+  //QC_ERR_NONE = 0,
+  //QC_ERR_UNEXPECTED_TOKEN,
+  //QC_ERR_MISMATCHED_PARENS,
   //QC_ERR_DIVIDE_BY_ZERO,
 } QCErrorEnum;
+
+const char* qc_err_strs[] = {
+#define X(err, str) str, 
+QC_ERRORS
+#undef X
+};
 
 int qc_is_binary_operator(QCToken tok);
 
